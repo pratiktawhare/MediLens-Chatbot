@@ -2,15 +2,16 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.db.database import init_db
+from app.db.database import init_db, is_sqlite
 from app.routers import auth, chat, dashboard, audio
 from app.services.rag_service import get_collection_stats
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Initialize SQLite database tables
+    # Startup: Initialize database tables
     init_db()
-    print("✅ SQLite database tables initialized.")
+    db_type = "SQLite" if is_sqlite else "PostgreSQL"
+    print(f"✅ Database tables initialized ({db_type}).")
     yield
     # Shutdown
     print("🛑 MediLens backend shutting down.")
@@ -46,6 +47,16 @@ app.include_router(auth.router)
 app.include_router(chat.router)
 app.include_router(dashboard.router)
 app.include_router(audio.router)
+
+@app.get("/")
+def root():
+    return {
+        "service": "MediLens AI Clinical Backend",
+        "status": "online",
+        "version": "2.0.0",
+        "docs": "/docs",
+        "health": "/api/health"
+    }
 
 @app.get("/api/health")
 def health_check():
