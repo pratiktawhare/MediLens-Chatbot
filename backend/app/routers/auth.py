@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlmodel import Session, select
-from pydantic import BaseModel, EmailStr
+from sqlmodel import Session, select, func
+from pydantic import BaseModel
 from app.db.database import get_session
 from app.db.models import User
 from app.core.security import hash_password, verify_password, create_access_token, decode_access_token
@@ -10,12 +10,12 @@ router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 security = HTTPBearer(auto_error=False)
 
 class RegisterRequest(BaseModel):
-    email: EmailStr
+    email: str
     password: str
     full_name: str = ""
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    email: str
     password: str
 
 class UserResponse(BaseModel):
@@ -54,23 +54,30 @@ def get_current_user(
 
 @router.post("/register", response_model=TokenResponse)
 def register(req: RegisterRequest, session: Session = Depends(get_session)):
-    statement = select(User).where(User.email == req.email)
-    existing_user = session.exec(statement).first()
-    if existing_user:
+    email_clean = req.email.strip().lower()
+    if "@" not in email_clean or "." not in email_clean:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="An account with this email already exists"
+            detail="Please provide a valid email address (e.g. name@example.com)"
         )
-    
-    if len(req.password) < 6:
+
+    if len(req.password.strip()) < 6:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Password must be at least 6 characters long"
         )
 
+    statement = select(User).where(func.lower(User.email) == email_clean)
+    existing_user = session.exec(statement).first()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="An account with this email already exists. Please sign in instead."
+        )
+
     user = User(
-        email=req.email,
-        full_name=req.full_name,
+        email=email_clean,
+        full_name=req.full_name.strip(),
         hashed_password=hash_password(req.password)
     )
     session.add(user)
@@ -85,12 +92,25 @@ def register(req: RegisterRequest, session: Session = Depends(get_session)):
 
 @router.post("/login", response_model=TokenResponse)
 def login(req: LoginRequest, session: Session = Depends(get_session)):
-    statement = select(User).where(User.email == req.email)
+    email_clean = req.email.strip().lower()
+    if not email_clean or not req.password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Please provide both email and password"
+        )
+
+    statement = select(User).where(func.lower(User.email) == email_clean)
     user = session.exec(statement).first()
-    if not user or not verify_password(req.password, user.hashed_password):
+    if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password"
+            detail="No account found with this email. Click 'Create Account' to register."
+        )
+
+    if not verify_password(req.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect password. Please try again."
         )
 
     token = create_access_token(user.id)

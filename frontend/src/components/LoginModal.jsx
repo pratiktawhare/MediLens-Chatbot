@@ -17,12 +17,21 @@ export default function LoginModal({ isOpen, onClose, onAuthSuccess, theme }) {
     setError('');
     setLoading(true);
 
+    const cleanEmail = email.trim();
+    const cleanPassword = password.trim();
+
+    if (!cleanEmail || !cleanPassword) {
+      setError('Please fill in both email and password.');
+      setLoading(false);
+      return;
+    }
+
     try {
       let res;
       if (isRegister) {
-        res = await authAPI.register(email, password, fullName);
+        res = await authAPI.register(cleanEmail, cleanPassword, fullName.trim());
       } else {
-        res = await authAPI.login(email, password);
+        res = await authAPI.login(cleanEmail, cleanPassword);
       }
 
       const { access_token, user } = res.data;
@@ -33,7 +42,15 @@ export default function LoginModal({ isOpen, onClose, onAuthSuccess, theme }) {
     } catch (err) {
       console.error('Auth error:', err);
       const detail = err.response?.data?.detail;
-      setError(typeof detail === 'string' ? detail : 'Authentication failed. Please check your credentials.');
+      let errorMsg = 'Authentication failed. Please verify your connection or credentials.';
+      if (typeof detail === 'string') {
+        errorMsg = detail;
+      } else if (Array.isArray(detail) && detail.length > 0) {
+        errorMsg = detail[0].msg || 'Invalid format.';
+      } else if (err.message) {
+        errorMsg = err.message;
+      }
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -52,8 +69,8 @@ export default function LoginModal({ isOpen, onClose, onAuthSuccess, theme }) {
         </button>
 
         {/* Modal Header */}
-        <div className="text-center mb-6">
-          <div className="w-12 h-12 mx-auto rounded-2xl bg-teal-50 dark:bg-teal-500/10 border border-teal-200 dark:border-teal-500/20 text-teal-600 dark:text-teal-400 flex items-center justify-center mb-3.5 shadow-xs">
+        <div className="text-center mb-5">
+          <div className="w-12 h-12 mx-auto rounded-2xl bg-teal-50 dark:bg-teal-500/10 border border-teal-200 dark:border-teal-500/20 text-teal-600 dark:text-teal-400 flex items-center justify-center mb-3 shadow-xs">
             <ShieldCheck className="w-6 h-6" />
           </div>
           <h2 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
@@ -64,6 +81,32 @@ export default function LoginModal({ isOpen, onClose, onAuthSuccess, theme }) {
               ? 'Register to save your consultations and medical bookmarks permanently.'
               : 'Sign in to access your consultations and health insights.'}
           </p>
+        </div>
+
+        {/* Mode Selector Tabs (Sign In vs Create Account) */}
+        <div className="flex rounded-xl bg-slate-100 dark:bg-slate-800 p-1 mb-5 border border-slate-200/80 dark:border-slate-700/60">
+          <button
+            type="button"
+            onClick={() => { setIsRegister(false); setError(''); }}
+            className={`flex-1 py-2 text-xs sm:text-sm font-semibold rounded-lg transition-all cursor-pointer ${
+              !isRegister
+                ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-sm border border-slate-200/60 dark:border-slate-700'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
+            }`}
+          >
+            Sign In
+          </button>
+          <button
+            type="button"
+            onClick={() => { setIsRegister(true); setError(''); }}
+            className={`flex-1 py-2 text-xs sm:text-sm font-semibold rounded-lg transition-all cursor-pointer ${
+              isRegister
+                ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-sm border border-slate-200/60 dark:border-slate-700'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
+            }`}
+          >
+            Create Account
+          </button>
         </div>
 
         {/* Error Alert */}
@@ -146,7 +189,7 @@ export default function LoginModal({ isOpen, onClose, onAuthSuccess, theme }) {
           </button>
         </form>
 
-        {/* Toggle between Login and Register */}
+        {/* Toggle between Login and Register (Bottom helper text) */}
         <div className="mt-6 text-center text-xs text-slate-500 dark:text-slate-400 border-t border-slate-100 dark:border-slate-800 pt-4">
           {isRegister ? (
             <span>
