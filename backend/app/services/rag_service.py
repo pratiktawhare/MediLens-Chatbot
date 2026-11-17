@@ -1,0 +1,71 @@
+import os
+from functools import lru_cache
+from typing import List, Dict, Any
+
+# Ensure HuggingFace loads directly from local cache without network lag
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+
+from langchain_chroma import Chroma
+from langchain_huggingface import HuggingFaceEmbeddings
+from app.core.config import settings
+
+@lru_cache()
+def get_embeddings() -> HuggingFaceEmbeddings:
+    """LangChain HuggingFace embeddings wrapper."""
+    return HuggingFaceEmbeddings(
+        model_name=settings.embedding_model_name,
+        model_kwargs={"device": "cpu"},
+        encode_kwargs={"normalize_embeddings": True}
+    )
+
+@lru_cache()
+def get_vector_store() -> Chroma:
+    """LangChain Chroma vector store instance."""
+    return Chroma(
+        collection_name="medilens_knowledge",
+        embedding_function=get_embeddings(),
+        persist_directory=settings.chroma_persist_dir
+    )
+
+def search_medical_knowledge(query: str, top_k: int = 4) -> List[Dict[str, Any]]:
+    """
+    Standard LangChain similarity search with score on Chroma.
+    """
+    try:
+        vector_store = get_vector_store()
+        # Inbuilt LangChain similarity search with score
+        docs_and_scores = vector_store.similarity_search_with_score(query, k=top_k)
+
+        citations = []
+        for doc, score in docs_and_scores:
+            meta = doc.metadata or {}
+            citations.append({
+                "page": meta.get("page", 1),
+                "file": meta.get("file", meta.get("source", "Medical Reference")),
+                "text": doc.page_content,
+                "score": round(float(score), 3),
+                "section": meta.get("section", f"Page {meta.get('page', 1)}")
+            })
+        return citations
+    except Exception as e:
+        print(f"[RAG Service Error]: {e}")
+        return []
+
+def get_collection_stats() -> Dict[str, Any]:
+    """Returns vector store diagnostics for the dashboard."""
+    try:
+        vector_store = get_vector_store()
+        count = vector_store._collection.count()
+        return {
+            "status": "ready" if count > 0 else "empty",
+            "document_count": count,
+            "collection_name": "medilens_knowledge",
+            "embedding_model": settings.embedding_model_name,
+            "storage_path": settings.chroma_persist_dir
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+            "document_count": 0
+        }
