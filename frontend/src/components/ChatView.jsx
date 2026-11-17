@@ -53,6 +53,20 @@ export default function ChatView({ activeSessionId, initialPrompt, onSelectCitat
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const audioElementRef = useRef(null);
+  const voicesRef = useRef([]);
+
+  useEffect(() => {
+    if ('speechSynthesis' in window) {
+      const updateVoices = () => {
+        voicesRef.current = window.speechSynthesis.getVoices();
+      };
+      updateVoices();
+      window.speechSynthesis.onvoiceschanged = updateVoices;
+    }
+    return () => {
+      stopTTS();
+    };
+  }, []);
 
   useEffect(() => {
     loadSessions();
@@ -96,6 +110,7 @@ export default function ChatView({ activeSessionId, initialPrompt, onSelectCitat
   };
 
   const loadSessionMessages = async (sessionId) => {
+    stopTTS();
     setLoading(true);
     try {
       const res = await chatAPI.getSessionMessages(sessionId);
@@ -109,6 +124,7 @@ export default function ChatView({ activeSessionId, initialPrompt, onSelectCitat
   };
 
   const handleNewChat = () => {
+    stopTTS();
     setCurrentSessionId(null);
     setMessages([]);
     setInput('');
@@ -220,20 +236,133 @@ export default function ChatView({ activeSessionId, initialPrompt, onSelectCitat
     }
   };
 
-  // Text-to-Speech via /api/speak
-  const playTTS = async (msgId, text) => {
-    if (speakingMsgId === msgId) {
-      if (audioElementRef.current) {
-        audioElementRef.current.pause();
-        audioElementRef.current = null;
+  // Helper: Strip emojis, repeated dashes, citations & markdown formatting for smooth, human-sounding speech
+  const cleanTextForSpeech = (rawText) => {
+    if (!rawText) return '';
+    return rawText
+      // 1. Remove citations like [PDF p. 380], [PDF Reference: ...], [Web: ...]
+      .replace(/\[(?:PDF|Web)[^\]]*\]/gi, '')
+      .replace(/\(p\.\s*\d+\)/gi, '')
+      // 2. Remove markdown links [text](url) -> text, and bare URLs
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      .replace(/https?:\/\/\S+/gi, '')
+      // 3. Remove all Emojis, pictographs, symbols & variation selectors
+      .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F900}-\u{1F9FF}\u{1F000}-\u{1F02F}\u{1F0A0}-\u{1F0FF}]/gu, '')
+      .replace(/\p{Extended_Pictographic}/gu, '')
+      // 4. Remove repeated dashes, horizontal lines, underscores, equals, tildes (e.g. ---, ------, -----------)
+      .replace(/[-_~=]{2,}/g, ' ')
+      // 5. Remove standalone dashes, bullets, pluses, en-dashes, em-dashes (preserves hyphenated words like over-the-counter)
+      .replace(/(?:^|\s)[-•*+–—]+(?:\s|$)/gm, ' ')
+      .replace(/[\u2013\u2014]/g, ' ')
+      // 6. Remove markdown symbols (asterisks, hashtags, backticks, quotes, pipes)
+      .replace(/[*_#`~>|\\^]/g, '')
+      // 7. Replace line breaks with a period and space for natural sentence pauses
+      .replace(/\n+/g, '. ')
+      // 8. Collapse repeated periods (e.g. "..") without altering decimals like 100.4
+      .replace(/\.{2,}/g, '.')
+      .replace(/\s+\./g, '.')
+      .replace(/\.\s+/g, '. ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  };
+
+  const getBestVoice = () => {
+    if (!('speechSynthesis' in window)) return null;
+    const voices = voicesRef.current?.length > 0 ? voicesRef.current : window.speechSynthesis.getVoices();
+    if (!voices || voices.length === 0) return null;
+
+    // Prefer natural English voices (Google, Microsoft Natural, Samantha, Jenny, Guy)
+    const preferred = voices.find(v => 
+      v.lang.startsWith('en') && 
+      (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Online') || v.name.includes('Samantha') || v.name.includes('Jenny') || v.name.includes('Guy'))
+    );
+    if (preferred) return preferred;
+
+    const anyEn = voices.find(v => v.lang.startsWith('en'));
+    return anyEn || voices[0];
+  };
+
+  const splitIntoSentences = (text) => {
+    // Split on sentence boundaries to prevent browser speech buffer timeouts on long answers
+    const rawChunks = text.match(/[^.!?]+[.!?]+(?:\s|$)|[^.!?]+$/g) || [text];
+    const sentences = [];
+    for (const chunk of rawChunks) {
+      const trimmed = chunk.trim();
+      if (trimmed.length > 0) {
+        sentences.push(trimmed);
       }
-      setSpeakingMsgId(null);
+    }
+    return sentences.length > 0 ? sentences : [text];
+  };
+
+  const stopTTS = () => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    if (audioElementRef.current) {
+      audioElementRef.current.pause();
+      audioElementRef.current = null;
+    }
+    setSpeakingMsgId(null);
+  };
+
+  // Instant Text-to-Speech via Web Speech API (zero latency) with backend fallback
+  const playTTS = async (msgId, text) => {
+    // If currently playing this message, stop immediately
+    if (speakingMsgId === msgId) {
+      stopTTS();
       return;
     }
 
+    // Stop any existing speech
+    stopTTS();
+
+    const cleanedText = cleanTextForSpeech(text);
+    if (!cleanedText) return;
+
+    // 1. Primary: Native Browser Web Speech API (Starts speaking within ~30ms, zero lag)
+    if ('speechSynthesis' in window) {
+      try {
+        setSpeakingMsgId(msgId);
+        window.speechSynthesis.cancel();
+
+        const sentences = splitIntoSentences(cleanedText);
+        const voice = getBestVoice();
+
+        sentences.forEach((sentence, index) => {
+          const utterance = new SpeechSynthesisUtterance(sentence);
+          if (voice) utterance.voice = voice;
+          utterance.rate = 1.0;
+          utterance.pitch = 1.0;
+
+          if (index === sentences.length - 1) {
+            utterance.onend = () => {
+              setSpeakingMsgId(null);
+            };
+          }
+
+          utterance.onerror = (e) => {
+            if (e.error !== 'interrupted' && e.error !== 'canceled') {
+              console.warn('Speech synthesis utterance note:', e);
+            }
+            if (index === sentences.length - 1) {
+              setSpeakingMsgId(null);
+            }
+          };
+
+          window.speechSynthesis.speak(utterance);
+        });
+
+        return;
+      } catch (err) {
+        console.warn('Local speech synthesis failed, falling back to backend:', err);
+      }
+    }
+
+    // 2. Secondary Fallback: Backend /api/speak
     setSpeakingMsgId(msgId);
     try {
-      const res = await audioAPI.speak(text);
+      const res = await audioAPI.speak(cleanedText.slice(0, 800));
       const audioUrl = URL.createObjectURL(res.data);
       const audio = new Audio(audioUrl);
       audioElementRef.current = audio;
@@ -241,15 +370,8 @@ export default function ChatView({ activeSessionId, initialPrompt, onSelectCitat
       audio.onerror = () => setSpeakingMsgId(null);
       await audio.play();
     } catch (err) {
-      console.warn('Backend TTS failed, falling back to browser speech synthesis:', err);
-      if ('speechSynthesis' in window) {
-        const utterance = new SpeechSynthesisUtterance(text.replace(/[*_#`>[\]]/g, ''));
-        utterance.onend = () => setSpeakingMsgId(null);
-        utterance.onerror = () => setSpeakingMsgId(null);
-        window.speechSynthesis.speak(utterance);
-      } else {
-        setSpeakingMsgId(null);
-      }
+      console.error('Audio playback error:', err);
+      setSpeakingMsgId(null);
     }
   };
 
@@ -575,13 +697,17 @@ export default function ChatView({ activeSessionId, initialPrompt, onSelectCitat
                     <span className="font-medium">{m.model_used || 'LangGraph Clinical Agent'}</span>
                     <button
                       onClick={() => playTTS(m.id, m.content)}
-                      className="px-2 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition flex items-center gap-1.5 cursor-pointer"
-                      title="Read consultation aloud"
+                      className={`px-2.5 py-1 rounded-lg transition flex items-center gap-1.5 cursor-pointer text-[11px] ${
+                        speakingMsgId === m.id
+                          ? 'bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20 font-semibold'
+                          : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                      title={speakingMsgId === m.id ? "Stop voice narration" : "Read consultation aloud"}
                     >
                       {speakingMsgId === m.id ? (
                         <>
-                          <VolumeX className="w-3.5 h-3.5 text-rose-500" />
-                          <span className="text-rose-500 font-semibold">Stop Voice</span>
+                          <VolumeX className="w-3.5 h-3.5 text-rose-500 animate-pulse" />
+                          <span className="font-semibold">Stop Voice</span>
                         </>
                       ) : (
                         <>
