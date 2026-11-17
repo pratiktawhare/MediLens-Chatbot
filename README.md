@@ -6,6 +6,13 @@ MediLens pairs rapid local vector retrieval against indexed clinical textbooks w
 
 ---
 
+### 🌐 Live Production Deployments
+- **Live Web Application**: [https://medilens-chatbot.vercel.app](https://medilens-chatbot.vercel.app)
+- **Live API Service**: [https://medilens-backend-kbeu.onrender.com](https://medilens-backend-kbeu.onrender.com)
+- **Interactive API Documentation (Swagger)**: [https://medilens-backend-kbeu.onrender.com/docs](https://medilens-backend-kbeu.onrender.com/docs)
+
+---
+
 ## 🏗️ System Architecture
 
 ```
