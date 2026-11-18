@@ -622,15 +622,16 @@ export default function ChatView({ activeSessionId, initialPrompt, onSelectCitat
                   Describe symptoms, upload medical photos, or ask clinical questions. Our evidence-informed AI references accredited literature and clinical guidelines.
                 </p>
                 {!user && (
-                  <div className="pt-2">
+                  <div className="pt-2 max-w-full">
                     <button
                       type="button"
                       onClick={onOpenLogin}
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-semibold shadow-md shadow-teal-600/20 transition cursor-pointer"
+                      className="inline-flex max-w-full items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-semibold shadow-md shadow-teal-600/20 transition cursor-pointer text-center"
                     >
-                      <Lock className="w-3.5 h-3.5" />
-                      <span>Sign In or Register to Save History</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
+                      <Lock className="w-3.5 h-3.5 shrink-0" />
+                      <span className="hidden sm:inline">Sign In or Register to Save History</span>
+                      <span className="sm:hidden">Sign In to Save History</span>
+                      <ArrowRight className="w-3.5 h-3.5 shrink-0" />
                     </button>
                   </div>
                 )}
