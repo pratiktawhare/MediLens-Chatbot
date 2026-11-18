@@ -24,23 +24,23 @@ app = FastAPI(
 )
 
 # CORS Setup
-origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
-if "*" in origins or not origins:
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-else:
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=origins,
-        allow_origin_regex=r"https://.*\.vercel\.app",
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+configured_origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
+default_allowed = [
+    "https://medilens-chatbot.vercel.app",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+]
+all_origins = list(set(configured_origins + default_allowed))
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=all_origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Include API Routers
 app.include_router(auth.router)

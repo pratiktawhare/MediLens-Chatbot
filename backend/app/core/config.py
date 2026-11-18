@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     gemini_model: str = "gemini-3.5-flash"
     
     # CORS
-    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000"
+    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,https://medilens-chatbot.vercel.app"
     
     model_config = SettingsConfigDict(
         env_file=str(BACKEND_DIR / ".env"),

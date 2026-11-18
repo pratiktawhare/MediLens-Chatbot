@@ -31,7 +31,11 @@ if not is_sqlite:
 engine = create_engine(db_url, **engine_kwargs)
 
 def init_db():
-    SQLModel.metadata.create_all(engine)
+    try:
+        SQLModel.metadata.create_all(engine)
+        print("✅ Database tables initialized successfully.")
+    except Exception as e:
+        print(f"⚠️ Notice: Database initialization deferred (will connect on demand): {e}")
 
 def get_session():
     with Session(engine) as session:
