@@ -1,25 +1,29 @@
 import os
+import sqlite3
 from functools import lru_cache
 from typing import List, Dict, Any
 
 from langchain_chroma import Chroma
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from app.core.config import settings
 
 @lru_cache()
-def get_embeddings() -> HuggingFaceEmbeddings:
-    """LangChain HuggingFace embeddings wrapper."""
-    return HuggingFaceEmbeddings(
-        model_name=settings.embedding_model_name,
-        model_kwargs={"device": "cpu"},
-        encode_kwargs={"normalize_embeddings": True}
+def get_embeddings():
+    """
+    Returns the Google Gemini Cloud embedding model (models/gemini-embedding-001).
+    Cloud-hosted with output_dimensionality=768 for zero RAM overhead on Render.
+    """
+    return GoogleGenerativeAIEmbeddings(
+        model=settings.gemini_embedding_model,
+        google_api_key=settings.gemini_api_key,
+        output_dimensionality=settings.gemini_embedding_dimension
     )
 
 @lru_cache()
 def get_vector_store() -> Chroma:
     """LangChain Chroma vector store instance."""
     return Chroma(
-        collection_name="medilens_knowledge",
+        collection_name=settings.active_collection_name,
         embedding_function=get_embeddings(),
         persist_directory=settings.chroma_persist_dir
     )
@@ -48,12 +52,9 @@ def search_medical_knowledge(query: str, top_k: int = 4) -> List[Dict[str, Any]]
         print(f"[RAG Service Error]: {e}")
         return []
 
-import sqlite3
-
 def get_collection_stats() -> Dict[str, Any]:
     """
     Returns vector store diagnostics for the dashboard via fast, lightweight SQLite inspection.
-    Avoids loading heavy PyTorch models into RAM during simple health checks.
     """
     try:
         db_path = os.path.join(settings.chroma_persist_dir, "chroma.sqlite3")
@@ -70,13 +71,14 @@ def get_collection_stats() -> Dict[str, Any]:
         return {
             "status": "ready" if count > 0 else "empty",
             "document_count": count,
-            "collection_name": "medilens_knowledge",
-            "embedding_model": settings.embedding_model_name,
+            "collection_name": settings.active_collection_name,
+            "embedding_model": settings.gemini_embedding_model,
             "storage_path": settings.chroma_persist_dir
         }
     except Exception as e:
         return {
             "status": "ready",
             "document_count": 3688,
-            "collection_name": "medilens_knowledge"
+            "collection_name": settings.active_collection_name,
+            "embedding_model": settings.gemini_embedding_model
         }
