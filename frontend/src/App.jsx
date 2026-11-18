@@ -92,7 +92,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 flex flex-col font-sans transition-colors duration-200">
+    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 flex flex-col font-sans transition-colors duration-200">
       
       {/* Top Navigation */}
       <Navbar
@@ -107,7 +107,7 @@ export default function App() {
       />
 
       {/* Main Content Area */}
-      <main className="flex-1">
+      <main className="flex-1 min-w-0 w-full overflow-x-hidden">
         {currentView === 'dashboard' ? (
           <DashboardView
             user={user}

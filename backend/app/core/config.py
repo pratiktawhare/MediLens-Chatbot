@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     chroma_persist_dir: str = str(BACKEND_DIR / "data" / "chroma_db")
     # Database
     database_url: str = ""
+    database_url_unpooled: str = ""
     sqlite_db_url: str = f"sqlite:///{BACKEND_DIR / 'data' / 'medilens.db'}"
     
     # Embedding Model (HuggingFace local model)

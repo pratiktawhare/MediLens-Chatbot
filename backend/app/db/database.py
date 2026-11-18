@@ -2,7 +2,7 @@ from sqlmodel import SQLModel, create_engine, Session
 from app.core.config import settings
 
 def get_db_url() -> str:
-    raw_url = settings.database_url.strip() if settings.database_url else ""
+    raw_url = (settings.database_url_unpooled or settings.database_url or "").strip()
     if not raw_url:
         return settings.sqlite_db_url
     

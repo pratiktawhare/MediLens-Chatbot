@@ -25,7 +25,7 @@ export default function CitationDrawer({ citation, onClose, onBookmarkSaved, the
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-end bg-slate-950/40 dark:bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="w-full max-w-lg h-full bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-2xl p-6 flex flex-col justify-between overflow-y-auto transition-colors duration-200">
+      <div className="w-full max-w-lg h-full bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-2xl p-4 sm:p-6 flex flex-col justify-between overflow-y-auto transition-colors duration-200">
         
         <div>
           {/* Header */}
